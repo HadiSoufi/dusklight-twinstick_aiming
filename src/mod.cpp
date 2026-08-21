@@ -1,5 +1,5 @@
 /*
- * Modern Aiming
+ * Twinstick Aiming
  *
  * Twin-stick item aiming: the left stick keeps moving Link while the right stick
  * (C-stick) drives the aiming reticle.
@@ -36,7 +36,6 @@
 #include "mods/service.hpp"
 #include "mods/svc/config.h"
 #include "mods/svc/hook.h"
-#include "mods/svc/log.h"
 #include "mods/svc/ui.h"
 
 #include "d/actor/d_a_alink.h"
@@ -57,7 +56,6 @@
 DEFINE_MOD();
 
 IMPORT_SERVICE(HookService,   svc_hook);
-IMPORT_SERVICE(LogService,    svc_log);
 IMPORT_SERVICE(ConfigService, svc_config);
 IMPORT_SERVICE(UiService,     svc_ui);
 
