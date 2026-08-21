@@ -1,0 +1,7 @@
+{
+  "id": "com.hadi.modern_aiming",
+  "name": "Modern Aiming",
+  "version": "1.0.0",
+  "author": "Hadi",
+  "description": "Converts item aiming to a modern twin-stick control scheme. Left stick controls movement, right stick (C-stick) controls aiming reticle."
+}
