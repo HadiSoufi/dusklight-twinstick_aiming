@@ -8,3 +8,4 @@ NOTES.md
 CLAUDE.md
 *.stackdump
 /test/
+/.claude/
