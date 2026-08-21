@@ -62,7 +62,6 @@ IMPORT_SERVICE(ConfigService, svc_config);
 IMPORT_SERVICE(UiService,     svc_ui);
 
 static ConfigVarHandle g_cfg_combat_compat = 0;
-static ConfigVarHandle g_cfg_debug_log = 0;
 static ConfigVarHandle g_cfg_bow_reticle = 0;
 
 /* ------------------------------------------------------------------
@@ -250,12 +249,6 @@ static bool cfg_bow_reticle() {
     return val;
 }
 
-static bool cfg_debug_log() {
-    bool val = false;
-    svc_config->get_bool(mod_ctx, g_cfg_debug_log, &val);
-    return val;
-}
-
 /* Buttons an item can sit on.  Vanilla only ever assigns items to X and Y --
  * checkItemChangeAutoAction literally loops `for (i = 0; i < 2; i++)` -- and B is
  * the sword, so treating B as an item button by default would misread a sword
@@ -268,22 +261,6 @@ static u8 item_button_mask() {
     return bits;
 }
 
-static void mlog(const char* fmt, ...) {
-    if (!cfg_debug_log()) {
-        return;
-    }
-
-    char buf[512];
-    va_list ap;
-    va_start(ap, fmt);
-    std::vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    svc_log->info(mod_ctx, buf);
-}
-
-/* Exactly one movement computation per frame while aiming: the game's own
- * routine inside checkNextAction is skipped for the duration of an aim, and the
- * mod's call is guarded to fire once.  Two writers on speedF pulses it. */
 static bool g_computing_movement = false;
 
 /* How many times movement was actually computed this frame.  More than one is
@@ -292,29 +269,6 @@ static int g_movement_calls = 0;
 
 /* A fault that lasts two seconds is one fault, not a hundred log lines.  Each
  * check reports when it starts and when it clears, with the duration. */
-struct ErrorState {
-    bool active;
-    int frames;
-};
-
-static void track_error(ErrorState* state, const char* label, bool failing, const char* message) {
-    if (failing) {
-        if (!state->active) {
-            state->active = true;
-            state->frames = 0;
-            mlog("%s", message);
-        }
-        state->frames++;
-    } else if (state->active) {
-        /* A one-frame episode has already said everything in its opening line,
-         * and the label matters because several of these interleave. */
-        if (state->frames > 1) {
-            mlog("%s: cleared after %d frames", label, state->frames);
-        }
-        state->active = false;
-    }
-}
-
 DEFINE_HOOK(&daAlink_c::setSpeedAndAngleNormal, SpeedAndAngleNormal);
 
 static HookAction on_speed_and_angle_normal_pre(ModContext*, void* args, void*, void*) {
@@ -427,26 +381,6 @@ static void on_set_body_angle_post(ModContext*, void* args, void*, void*) {
  * Measured at our own hook the accumulator looked healthy at 11.78 while the
  * applied speed was 4.5, so the loss is inside this derivation.  Logging its
  * inputs at the moment it runs is the only way to see which term takes it. */
-DEFINE_HOOK(&daAlink_c::posMove, PosMove);
-
-static HookAction on_pos_move_pre(ModContext*, void* args, void*, void*) {
-    daAlink_c* link = mods::arg<daAlink_c*>(args, 0);
-    if (link != nullptr && mod_drives_movement(link)) {
-        const f32 degrees = 360.0f / 65536.0f;
-        mlog("posMove in: accum=%.2f modifier=%.2f speed_now=%.2f travel=%d deg stick=%.2f",
-             link->mNormalSpeed, link->mSpeedModifier, link->speedF,
-             (int)((f32)(u16)link->current.angle.y * degrees), link->mStickValue);
-    }
-    return HOOK_CONTINUE;
-}
-
-static void on_pos_move_post(ModContext*, void* args, void*, void*) {
-    daAlink_c* link = mods::arg<daAlink_c*>(args, 0);
-    if (link != nullptr && mod_drives_movement(link)) {
-        mlog("posMove out: speed=%.2f accum=%.2f", link->speedF, link->mNormalSpeed);
-    }
-}
-
 /* Sited on checkNextAction: the subject procs call it unconditionally, and it
  * is where the game's own movement dispatch lives, so it reads the state the
  * game's own call would have.  (setBodyAngleToCamera sits behind two
@@ -560,114 +494,8 @@ static void on_check_next_action_post(ModContext*, void* args, void*, void*) {
     link->setBlendAtnMoveAnime(link->mpHIO->mBasic.m.mBasicInterpolation);
 
     link->mSpeedModifier = speed_modifier;
-
-    /* Angles here are 16-bit: kQuarterTurn is 90 degrees. */
-    const f32 degrees = 360.0f / 65536.0f;
-
-    const int requested = (int)((f32)(u16)link->mMoveAngle * degrees);
-    const int travel = (int)((f32)(u16)link->current.angle.y * degrees);
-    const int model = (int)((f32)(u16)link->shape_angle.y * degrees);
-    const int drift =
-        (int)((f32)(s16)(link->current.angle.y - link->mMoveAngle) * degrees);
-
-    (void)model;
-
-    const bool wall = link->mLinkAcch.ChkWallHit() != 0;
-
-    static struct {
-        ErrorState drift;
-        ErrorState low_speed;
-        ErrorState jump;
-        ErrorState negative;
-        ErrorState double_write;
-        ErrorState external;
-    } errors;
-    char message[160];
-
-    std::snprintf(message, sizeof(message),
-                  "heading_drift: requested=%d travel=%d", requested, travel);
-    track_error(&errors.drift, "heading_drift",
-                drift > 20 || drift < -20, message);
-
-    /* Pushing into a wall is a legitimate way to be stopped. */
-    std::snprintf(message, sizeof(message),
-                  "low_speed: stick=%.2f accum=%.2f applied=%.2f dir=%d in %s calls=%d",
-                  link->mStickValue, link->mNormalSpeed, link->speedF, direction_bucket,
-                  proc_name(link->mProcID), g_movement_calls);
-    track_error(&errors.low_speed, "low_speed",
-                link->mStickValue > 0.9f && link->mNormalSpeed < 5.0f && !wall, message);
-
-    /* The reported symptom itself: speed swinging while the stick is held steady. */
-    static f32 last_stick = 0.0f;
-    const f32 speed_delta = link->mNormalSpeed - speed_before;
-    const f32 stick_delta = link->mStickValue - last_stick;
-    std::snprintf(message, sizeof(message),
-                  "speed_jump: accum %.2f->%.2f stick=%.2f dir=%d calls=%d rate_gate=%d",
-                  speed_before, link->mNormalSpeed, link->mStickValue, direction_bucket,
-                  g_movement_calls,
-                  (int)(abs((s16)(link->mPrevStickAngle - link->mStickAngle)) > kSixteenthTurn));
-    track_error(&errors.jump, "speed_jump",
-                (speed_delta > 2.0f || speed_delta < -2.0f) && stick_delta < 0.1f &&
-                    stick_delta > -0.1f && !wall,
-                message);
-    last_stick = link->mStickValue;
-
-    /* Did anything change speed between our calls?  If so there is a writer we
-     * have not accounted for. */
-    const f32 outside_delta = have_last_speed ? (speed_before - last_speed) : 0.0f;
-    std::snprintf(message, sizeof(message), "external_write: left=%.2f found=%.2f delta=%.2f",
-                  last_speed, speed_before, outside_delta);
-    track_error(&errors.external, "external_write",
-                have_last_speed && (outside_delta > 1.0f || outside_delta < -1.0f), message);
-
-    last_speed = link->mNormalSpeed;
-    have_last_speed = true;
-
-    /* The accumulator is healthy but the player still feels a drag, so the loss is
-     * downstream, where d_a_alink.cpp:13028 derives the speed actually applied:
-     *
-     *   speedF = mNormalSpeed * (1 - |mSpeedModifier|)   then   *= cos(ground angle)
-     *
-     * Logging each term says which one eats it.  slope_factor is what is left
-     * after the modifier is accounted for, so a value near 1 means terrain is not
-     * involved at all. */
-    const f32 after_modifier = link->mNormalSpeed * (1.0f - fabsf(link->mSpeedModifier));
-    const f32 slope_factor = (after_modifier > 0.01f) ? (link->speedF / after_modifier) : 1.0f;
-
-    static ErrorState speed_loss;
-    /* accum sitting at 9.10 is 0.7 x max, the clamp floor inside
-     * getStickAngleDistanceRate -- which only setSpeedAndAngleNormal calls.  So
-     * either our chain still reaches Normal (calls=1) or that number is coming
-     * from Atn's own parameters (calls=0).  stick_turn is the test that gates the
-     * clamp: it compares this frame's stick heading against last frame's, and the
-     * twin-stick swap writes the C-stick into that same field. */
-    std::snprintf(message, sizeof(message),
-                  "speed_loss: applied=%.2f accum=%.2f max=%.2f dir=%d calls=%d in %s",
-                  link->speedF, link->mNormalSpeed, link->mMaxSpeed, direction_bucket,
-                  g_movement_calls, proc_name(link->mProcID));
-    /* Trigger on what the player feels -- a low applied speed at full stick --
-     * rather than on the accumulator being below max.  The previous condition
-     * fired three times in a whole session because during the drag the
-     * accumulator is close to max: it is mMaxSpeed itself that is low. */
-    track_error(&speed_loss, "speed_loss", link->mStickValue > 0.9f && link->speedF < 8.0f,
-                message);
-
-    /* Speed every frame.  It is the thing being fixed; the accumulator is only
-     * an intermediate the game keeps, and watching it instead is how a session
-     * went by with the accumulator healthy and the speed at zero. */
-    mlog("speed: %.2f  accum: %.2f  stick: %.2f  dir: %d", link->speedF, link->mNormalSpeed,
-         link->mStickValue, direction_bucket);
-
-
-
-    std::snprintf(message, sizeof(message), "negative_speed: accum=%.2f", link->mNormalSpeed);
-    track_error(&errors.negative, "negative_speed", link->mNormalSpeed < 0.0f, message);
-
-    /* Only ever more than one.  Zero is normal: the strafe directions are handled
-     * inside setSpeedAndAngleAtn and never reach the function this counts. */
-    std::snprintf(message, sizeof(message), "double_write: calls=%d", g_movement_calls);
-    track_error(&errors.double_write, "double_write", g_movement_calls > 1, message);
 }
+
 
 
 /* changeArrowType puts BUTTON_STATUS_SWITCH on R.  Move it to the Z slot, which
@@ -1853,9 +1681,6 @@ static void on_stick_data_post(ModContext*, void* args, void*, void*) {
     g_boomerang_lock_offered = g_boomerang_lock_seen_this_frame;
     g_boomerang_lock_seen_this_frame = false;
 
-    const char* was = gesture_name();
-    const bool was_suppressed = fire_is_suppressed();
-
     /* Aliasing happens before anything reads the button, this mod included.  An
      * alias that lands after the gesture is tracked is not an alias: the press
      * stays invisible to our own fire decision, which then suppresses the shot
@@ -1906,12 +1731,6 @@ static void on_stick_data_post(ModContext*, void* args, void*, void*) {
 
     track_firing_gesture(link);
 
-    const bool suppressed = fire_is_suppressed();
-    if (suppressed != was_suppressed || gesture_name() != was) {
-        mlog("fire %-10s  press=%-15s  item=%-12s  in %s",
-             suppressed ? "suppressed" : "allowed", gesture_name(),
-             item_name((u16)link->getReadyItem()), proc_name(link->mProcID));
-    }
 }
 
 /* Scoped override: the bit exists only inside one hooked call.  Nesting is real
@@ -2007,14 +1826,6 @@ static ModResult on_build_panel(ModContext* ctx, UiElementHandle panel, void*, M
     compat.config_var = g_cfg_combat_compat;
     svc_ui->pane_add_control(ctx, panel, &compat, nullptr);
 
-    UiControlDesc dbg = UI_CONTROL_DESC_INIT;
-    dbg.kind = UI_CONTROL_TOGGLE;
-    dbg.label = "Verbose input logging";
-    dbg.help_rml = "Logs per-frame item button and proc state to the console. For debugging only; very noisy.";
-    dbg.binding = UI_BINDING_CONFIG_VAR;
-    dbg.config_var = g_cfg_debug_log;
-    svc_ui->pane_add_control(ctx, panel, &dbg, nullptr);
-
     return MOD_OK;
 }
 
@@ -2033,13 +1844,6 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
     r = svc_config->register_var(mod_ctx, &compat, &g_cfg_combat_compat);
     if (r != MOD_OK) return mods::set_error(error, r, "register_var combat_compat");
 
-    ConfigVarDesc dbg = CONFIG_VAR_DESC_INIT;
-    dbg.name = "debug_log";
-    dbg.type = CONFIG_VAR_BOOL;
-    dbg.default_bool = false;
-    r = svc_config->register_var(mod_ctx, &dbg, &g_cfg_debug_log);
-    if (r != MOD_OK) return mods::set_error(error, r, "register_var debug_log");
-
     ConfigVarDesc reticle = CONFIG_VAR_DESC_INIT;
     reticle.name = "bow_reticle";
     reticle.type = CONFIG_VAR_BOOL;
@@ -2057,11 +1861,6 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
 
     r = mods::hook_add_pre<SetBodyAngleToCamera>(svc_hook, on_set_body_angle_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "setBodyAngleToCamera pre");
-    r = mods::hook_add_pre<PosMove>(svc_hook, on_pos_move_pre);
-    if (r != MOD_OK) return mods::set_error(error, r, "posMove pre");
-
-    r = mods::hook_add_post<PosMove>(svc_hook, on_pos_move_post);
-    if (r != MOD_OK) return mods::set_error(error, r, "posMove post");
 
     r = mods::hook_add_post<CheckNextAction>(svc_hook, on_check_next_action_post);
     if (r != MOD_OK) return mods::set_error(error, r, "checkNextAction post");
@@ -2141,7 +1940,6 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
     r = mods::hook_add_post<AimContext>(svc_hook, on_scope_post);
     if (r != MOD_OK) return mods::set_error(error, r, "checkAimContext post");
 
-    svc_log->info(mod_ctx, "Modern Aiming initialized");
     return MOD_OK;
 }
 
