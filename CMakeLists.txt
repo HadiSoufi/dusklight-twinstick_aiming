@@ -12,17 +12,3 @@ add_mod(twinstick_aiming
         SOURCES src/mod.cpp
         MOD_JSON mod.json
 )
-target_include_directories(twinstick_aiming PRIVATE include)
-
-# Development-only harness driven by test/run_tests.ps1. Off by default so a
-# normal build never ships it alongside the mod.
-option(TWINSTICK_AIMING_BUILD_TESTS "Build the unattended aiming test harness" OFF)
-
-if (TWINSTICK_AIMING_BUILD_TESTS)
-    add_mod(aim_test
-            FEATURES game
-            SOURCES test/aim_test.cpp
-            MOD_JSON test/mod.json
-    )
-    target_include_directories(aim_test PRIVATE include)
-endif ()

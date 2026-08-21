@@ -31,7 +31,6 @@
 
 #include <cstdio>
 
-#include "clawshot_state.h"
 #include "mods/hook.hpp"
 #include "mods/service.hpp"
 #include "mods/svc/config.h"
@@ -168,6 +167,18 @@ static bool is_aiming_proc(u16 proc_id) {
     default:
         return false;
     }
+}
+
+/* The clawshot's shot, as one predicate.
+ *
+ * daAlink_c::mItemMode counts up through the shot -- 2 is the claw leaving his
+ * hand, then chain out, flying, returning -- and the game's own enum for it is
+ * anonymous and file-local to d_a_alink_hook.inc, so it cannot be used here.
+ * Stated as what a player would see rather than as a number. */
+static const int kClawshotChainLeavesHand = 2;
+
+static bool chain_is_in_air(int item_mode) {
+    return item_mode >= kClawshotChainLeavesHand;
 }
 
 /* Movement is handed straight back the moment a shot leaves.
