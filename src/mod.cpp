@@ -31,10 +31,10 @@
 
 #include <cstdio>
 
-#include "mods/hook.hpp"
 #include "mods/service.hpp"
 #include "mods/svc/config.h"
 #include "mods/svc/hook.h"
+#include "mods/svc/hook.hpp"
 #include "mods/svc/ui.h"
 
 #include "d/actor/d_a_alink.h"
@@ -1262,25 +1262,25 @@ static HookAction on_meter_button_draw_pre(ModContext*, void* args, void*, void*
  * up by hand would be reimplementing the awkward half of this. */
 
 static ModResult install() {
-    ModResult r = mods::hook_add_pre<PromptRowSetString>(svc_hook, on_meter_set_string_pre);
+    ModResult r = mods::hook::add_pre<PromptRowSetString>(svc_hook, on_meter_set_string_pre);
     if (r != MOD_OK) return r;
 
-    r = mods::hook_add_post<PromptRowCenterPos>(svc_hook, on_center_pos_calc_post);
+    r = mods::hook::add_post<PromptRowCenterPos>(svc_hook, on_center_pos_calc_post);
     if (r != MOD_OK) return r;
 
-    r = mods::hook_add_post<PromptRowScreenInit>(svc_hook, on_screen_init_button_post);
+    r = mods::hook::add_post<PromptRowScreenInit>(svc_hook, on_screen_init_button_post);
     if (r != MOD_OK) return r;
 
-    r = mods::hook_add_pre<PromptRowTransButton>(svc_hook, on_trans_button_pre);
+    r = mods::hook::add_pre<PromptRowTransButton>(svc_hook, on_trans_button_pre);
     if (r != MOD_OK) return r;
 
-    r = mods::hook_add_post<PromptRowTransButton>(svc_hook, on_trans_button_post);
+    r = mods::hook::add_post<PromptRowTransButton>(svc_hook, on_trans_button_post);
     if (r != MOD_OK) return r;
 
-    r = mods::hook_add_pre<PromptRowDraw>(svc_hook, on_meter_button_draw_pre);
+    r = mods::hook::add_pre<PromptRowDraw>(svc_hook, on_meter_button_draw_pre);
     if (r != MOD_OK) return r;
 
-    return mods::hook_add_pre<PictureDrawSelf>(svc_hook, on_picture_draw_self_pre);
+    return mods::hook::add_pre<PictureDrawSelf>(svc_hook, on_picture_draw_self_pre);
 }
 
 }  // namespace prompt_row
@@ -1865,88 +1865,88 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
     r = svc_ui->register_mods_panel(mod_ctx, &panel);
     if (r != MOD_OK) return mods::set_error(error, r, "register_mods_panel");
 
-    r = mods::hook_add_pre<SpeedAndAngleNormal>(svc_hook, on_speed_and_angle_normal_pre);
+    r = mods::hook::add_pre<SpeedAndAngleNormal>(svc_hook, on_speed_and_angle_normal_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "setSpeedAndAngleNormal pre");
 
-    r = mods::hook_add_pre<SetBodyAngleToCamera>(svc_hook, on_set_body_angle_pre);
+    r = mods::hook::add_pre<SetBodyAngleToCamera>(svc_hook, on_set_body_angle_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "setBodyAngleToCamera pre");
 
-    r = mods::hook_add_post<CheckNextAction>(svc_hook, on_check_next_action_post);
+    r = mods::hook::add_post<CheckNextAction>(svc_hook, on_check_next_action_post);
     if (r != MOD_OK) return mods::set_error(error, r, "checkNextAction post");
 
-    r = mods::hook_add_post<SetBodyAngleToCamera>(svc_hook, on_set_body_angle_post);
+    r = mods::hook::add_post<SetBodyAngleToCamera>(svc_hook, on_set_body_angle_post);
     if (r != MOD_OK) return mods::set_error(error, r, "setBodyAngleToCamera post");
 
 
     r = prompt_row::install();
     if (r != MOD_OK) return mods::set_error(error, r, "prompt_row::install");
 
-    r = mods::hook_add_post<MeterCheckStatus>(svc_hook, on_meter_check_status_post);
+    r = mods::hook::add_post<MeterCheckStatus>(svc_hook, on_meter_check_status_post);
     if (r != MOD_OK) return mods::set_error(error, r, "dMeter2::checkStatus post");
 
-    r = mods::hook_add_pre<MeterButtonExecute>(svc_hook, on_meter_button_execute_pre);
+    r = mods::hook::add_pre<MeterButtonExecute>(svc_hook, on_meter_button_execute_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "dMeterButton::_execute pre");
 
-    r = mods::hook_add_pre<AlphaAnimeButtonZ>(svc_hook, on_alpha_anime_button_z_pre);
+    r = mods::hook::add_pre<AlphaAnimeButtonZ>(svc_hook, on_alpha_anime_button_z_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "alphaAnimeButtonZ pre");
 
-    r = mods::hook_add_pre<SubjectCamera>(svc_hook, on_subject_camera_pre);
+    r = mods::hook::add_pre<SubjectCamera>(svc_hook, on_subject_camera_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "hook subjectCamera");
 
-    r = mods::hook_add_post<SubjectCamera>(svc_hook, on_subject_camera_post);
+    r = mods::hook::add_post<SubjectCamera>(svc_hook, on_subject_camera_post);
     if (r != MOD_OK) return mods::set_error(error, r, "hook subjectCamera post");
 
-    r = mods::hook_add_post<ChangeArrowType>(svc_hook, on_change_arrow_type_post);
+    r = mods::hook::add_post<ChangeArrowType>(svc_hook, on_change_arrow_type_post);
     if (r != MOD_OK) return mods::set_error(error, r, "changeArrowType post");
 
-    r = mods::hook_add_post<BowSight>(svc_hook, on_bow_sight_post);
+    r = mods::hook::add_post<BowSight>(svc_hook, on_bow_sight_post);
     if (r != MOD_OK) return mods::set_error(error, r, "setBowSight post");
 
 
-    r = mods::hook_add_post<SetStickData>(svc_hook, on_stick_data_post);
+    r = mods::hook::add_post<SetStickData>(svc_hook, on_stick_data_post);
     if (r != MOD_OK) return mods::set_error(error, r, "setStickData");
 
     /* Every scoped pre must have its post or the bit leaks. */
-    r = mods::hook_add_pre<UpperItemBoomerang>(svc_hook, on_item_decision_pre);
+    r = mods::hook::add_pre<UpperItemBoomerang>(svc_hook, on_item_decision_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "upperItemBoomerang pre");
-    r = mods::hook_add_post<UpperItemBoomerang>(svc_hook, on_scope_post);
+    r = mods::hook::add_post<UpperItemBoomerang>(svc_hook, on_scope_post);
     if (r != MOD_OK) return mods::set_error(error, r, "upperItemBoomerang post");
 
-    r = mods::hook_add_pre<UpperItemCopyRod>(svc_hook, on_item_decision_pre);
+    r = mods::hook::add_pre<UpperItemCopyRod>(svc_hook, on_item_decision_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "upperItemCopyRod pre");
-    r = mods::hook_add_post<UpperItemCopyRod>(svc_hook, on_scope_post);
+    r = mods::hook::add_post<UpperItemCopyRod>(svc_hook, on_scope_post);
     if (r != MOD_OK) return mods::set_error(error, r, "upperItemCopyRod post");
 
-    r = mods::hook_add_pre<UpperItemIronBall>(svc_hook, on_item_decision_pre);
+    r = mods::hook::add_pre<UpperItemIronBall>(svc_hook, on_item_decision_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "upperItemIronBall pre");
-    r = mods::hook_add_post<UpperItemIronBall>(svc_hook, on_scope_post);
+    r = mods::hook::add_post<UpperItemIronBall>(svc_hook, on_scope_post);
     if (r != MOD_OK) return mods::set_error(error, r, "upperItemIronBall post");
 
-    r = mods::hook_add_pre<ItemActionButtonStatus>(svc_hook, on_item_action_button_status_pre);
+    r = mods::hook::add_pre<ItemActionButtonStatus>(svc_hook, on_item_action_button_status_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "hook setItemActionButtonStatus pre");
 
-    r = mods::hook_add_pre<NextActionHookshot>(svc_hook, on_next_action_hookshot_pre);
+    r = mods::hook::add_pre<NextActionHookshot>(svc_hook, on_next_action_hookshot_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "hook checkNextActionHookshot pre");
 
-    r = mods::hook_add_pre<NextActionBoomerang>(svc_hook, on_next_action_boomerang_pre);
+    r = mods::hook::add_pre<NextActionBoomerang>(svc_hook, on_next_action_boomerang_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "hook checkNextActionBoomerang pre");
 
-    r = mods::hook_add_pre<NextActionCopyRod>(svc_hook, on_next_action_copy_rod_pre);
+    r = mods::hook::add_pre<NextActionCopyRod>(svc_hook, on_next_action_copy_rod_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "hook checkNextActionCopyRod pre");
 
-    r = mods::hook_add_pre<UpperItemHookshot>(svc_hook, on_item_decision_pre);
+    r = mods::hook::add_pre<UpperItemHookshot>(svc_hook, on_item_decision_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "upperItemHookshot pre");
-    r = mods::hook_add_post<UpperItemHookshot>(svc_hook, on_scope_post);
+    r = mods::hook::add_post<UpperItemHookshot>(svc_hook, on_scope_post);
     if (r != MOD_OK) return mods::set_error(error, r, "upperItemHookshot post");
 
-    r = mods::hook_add_pre<IronBallSubject>(svc_hook, on_item_decision_pre);
+    r = mods::hook::add_pre<IronBallSubject>(svc_hook, on_item_decision_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "procIronBallSubject pre");
-    r = mods::hook_add_post<IronBallSubject>(svc_hook, on_scope_post);
+    r = mods::hook::add_post<IronBallSubject>(svc_hook, on_scope_post);
     if (r != MOD_OK) return mods::set_error(error, r, "procIronBallSubject post");
 
-    r = mods::hook_add_pre<AimContext>(svc_hook, on_item_decision_pre);
+    r = mods::hook::add_pre<AimContext>(svc_hook, on_item_decision_pre);
     if (r != MOD_OK) return mods::set_error(error, r, "checkAimContext pre");
-    r = mods::hook_add_post<AimContext>(svc_hook, on_scope_post);
+    r = mods::hook::add_post<AimContext>(svc_hook, on_scope_post);
     if (r != MOD_OK) return mods::set_error(error, r, "checkAimContext post");
 
     return MOD_OK;
